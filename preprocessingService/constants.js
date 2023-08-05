@@ -1,0 +1,9 @@
+const NORMALIZE = "NORMALIZE";
+const STANDARIZE = "STANDARIZE";
+
+const SCALE_TYPES = {
+  NORMALIZE,
+  STANDARIZE,
+};
+
+module.exports = { SCALE_TYPES };
