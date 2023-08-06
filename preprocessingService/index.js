@@ -12,6 +12,7 @@ function preprocess({
   pickColumns,
   windowSize,
   horizonSize,
+  labelName,
 }) {
   const { windows, labels } = createDataWindows(
     mappedRows,
@@ -19,95 +20,96 @@ function preprocess({
     horizonSize
   );
 
+  let trainFeatures, testFeatures, trainLabels, testLabels;
+
   const preprocessed = {
     windows: trainTestSplit(windows, Number(testFraction)),
     labels: trainTestSplit(labels, Number(testFraction)),
   };
 
-  return preprocessed;
+  if (scaleColumnsSeparately) {
+    const columnElements = {};
+    pickColumns.forEach((columnName) => {
+      let array = [];
+      preprocessed.windows[0].forEach((e) =>
+        e.forEach((f) => f.forEach((g) => array.push(g[columnName])))
+      );
+      columnElements[columnName] = {
+        min: tf.tensor(array).min(),
+        max: tf.tensor(array).max(),
+      };
+    });
+    const getScaledColumn = (columnValues, columnName) => {
+      if (scaleType === SCALE_TYPES.NORMALIZE) {
+        return normalize(
+          tf.tensor(columnValues),
+          columnElements[columnName].min,
+          columnElements[columnName].max
+        ).arraySync();
+      } else if (scaleType === SCALE_TYPES.STANDARIZE) {
+        return standarize(
+          tf.tensor(columnValues),
+          columnElements[columnName].min,
+          columnElements[columnName].max
+        ).arraySync();
+      } else {
+        return tf.tensor(columnValues);
+      }
+    };
+    trainFeatures = preprocessed.windows[0].map((e) =>
+      e.map((f) =>
+        f.map((g) => pickColumns.map((h) => getScaledColumn(g[h], h))).flat()
+      )
+    );
+    testFeatures = preprocessed.windows[1].map((e) =>
+      e.map((f) =>
+        f.map((g) => pickColumns.map((h) => getScaledColumn(g[h], h))).flat()
+      )
+    );
+  } else {
+    trainFeatures = preprocessed.windows[0].map((e) =>
+      e.map((f) => f.map((g) => pickColumns.map((h) => g[h])).flat())
+    );
 
-  // console.log(JSON.stringify(preprocessed.windows, null, 2));
-  // console.log(JSON.stringify(preprocessed.labels, null, 2));
+    testFeatures = preprocessed.windows[1].map((e) =>
+      e.map((f) => f.map((g) => pickColumns.map((h) => g[h])).flat())
+    );
 
-  // let trainFeatures, testFeatures, trainLabels, testLabels;
+    if (scaleType === SCALE_TYPES.NORMALIZE) {
+      trainFeatures = normalize(tf.tensor(trainFeatures)).arraySync();
+      testFeatures = normalize(
+        tf.tensor(testFeatures),
+        tf.tensor(trainFeatures).min(),
+        tf.tensor(trainFeatures).max()
+      ).arraySync();
+    } else if (scaleType === SCALE_TYPES.STANDARIZE) {
+      trainFeatures = standarize(tf.tensor(trainFeatures)).arraySync();
+      testFeatures = standarize(
+        tf.tensor(testFeatures),
+        tf.tensor(trainFeatures).min(),
+        tf.tensor(trainFeatures).max()
+      ).arraySync();
+    }
+  }
 
-  // if (scaleColumnsSeparately) {
-  //   const columnElements = {};
-  //   pickColumns.forEach((columnName) => {
-  //     let array = [];
-  //     preprocessed.windows[0].map((e) =>
-  //       e.forEach((f) => f.features.forEach((g) => array.push(g[columnName])))
-  //     );
-  //     columnElements[columnName] = {
-  //       min: tf.tensor(array).min(),
-  //       max: tf.tensor(array).max(),
-  //     };
-  //   });
+  const splittedLabels = labelName.split(".");
 
-  //   const getScaledColumn = (columnValues, columnName) => {
-  //     if (scaleType === SCALE_TYPES.NORMALIZE) {
-  //       return normalize(
-  //         tf.tensor(columnValues),
-  //         columnElements[columnName].min,
-  //         columnElements[columnName].max
-  //       ).arraySync();
-  //     } else {
-  //       return standarize(
-  //         tf.tensor(columnValues),
-  //         columnElements[columnName].min,
-  //         columnElements[columnName].max
-  //       ).arraySync();
-  //     }
-  //   };
+  trainLabels = preprocessed.labels[0].map((e) =>
+    e.map((f) =>
+      splittedLabels.length > 1
+        ? f[splittedLabels[0]][splittedLabels[1]]
+        : f[splittedLabels[0]]
+    )
+  );
+  testLabels = preprocessed.labels[1].map((e) =>
+    e.map((f) =>
+      splittedLabels.length > 1
+        ? f[splittedLabels[0]][splittedLabels[1]]
+        : f[splittedLabels[0]]
+    )
+  );
 
-  //   trainFeatures = preprocessed.windows[0].map((e) =>
-  //     e.map((f) =>
-  //       f.features
-  //         .map((g) => pickColumns.map((h) => getScaledColumn(g[h], h)))
-  //         .flat()
-  //     )
-  //   );
-  //   testFeatures = preprocessed.windows[1].map((e) =>
-  //     e.map((f) =>
-  //       f.features
-  //         .map((g) => pickColumns.map((h) => getScaledColumn(g[h], h)))
-  //         .flat()
-  //     )
-  //   );
-  // } else {
-  //   trainFeatures = preprocessed.windows[0].map((e) =>
-  //     e.map((f) => f.features.map((g) => pickColumns.map((h) => g[h])).flat())
-  //   );
-  //   testFeatures = preprocessed.windows[1].map((e) =>
-  //     e.map((f) => f.features.map((g) => pickColumns.map((h) => g[h])).flat())
-  //   );
-  //   if (scaleType === SCALE_TYPES.NORMALIZE) {
-  //     trainFeatures = normalize(tf.tensor(trainFeatures)).arraySync();
-  //     testFeatures = normalize(
-  //       tf.tensor(testFeatures),
-  //       tf.tensor(trainFeatures).min(),
-  //       tf.tensor(trainFeatures).max()
-  //     ).arraySync();
-  //   } else if (scaleType === SCALE_TYPES.STANDARIZE) {
-  //     trainFeatures = standarize(tf.tensor(trainFeatures)).arraySync();
-  //     testFeatures = standarize(
-  //       tf.tensor(testFeatures),
-  //       tf.tensor(trainFeatures).min(),
-  //       tf.tensor(trainFeatures).max()
-  //     ).arraySync();
-  //   }
-  // }
-
-  // trainLabels = preprocessed.labels[0].map((e) => e.map((f) => f.label.close));
-  // testLabels = preprocessed.labels[1].map((e) => e.map((f) => f.label.close));
-
-  // console.log(trainFeatures);
-  // console.log(testFeatures);
-
-  // console.log(trainLabels);
-  // console.log(testLabels);
-
-  // return [trainFeatures, testFeatures, trainLabels, testLabels];
+  return [trainFeatures, trainLabels, testFeatures, testLabels];
 }
 
 module.exports = { preprocess };

@@ -549,7 +549,6 @@ app.post("/api/preprocessData", async (req, res) => {
                 },
               },
             },
-
           ],
           as: "posts",
         },
@@ -621,12 +620,27 @@ app.post("/api/preprocessData", async (req, res) => {
         Low: 1,
       };
     }
+
     const result = await dbLabelModels[body.labelType].aggregate(query);
+
+    const getLabelName = () => {
+      if (body.labelType === BITCOIN_VALUE) {
+        return "quote.close";
+      } else if (body.labelType === AMAZON_VALUE) {
+        return "Close";
+      } else {
+        return "Close/Last";
+      }
+    };
 
     const processed = preprocess({
       mappedRows: result.reverse(),
       windowSize: body.windowSize,
       horizonSize: body.horizonSize,
+      scaleColumnsSeparately: body.scaleColumnsSeparately,
+      pickColumns: body.pickColumns,
+      scaleType: body.scaleType,
+      labelName: getLabelName(),
     });
 
     const end = Date.now();
