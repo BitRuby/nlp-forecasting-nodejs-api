@@ -8,6 +8,11 @@ const { transformations } = require("./transformations");
 const { countPostsByDate, MissingParameterError } = require("./utils");
 const { preprocess } = require("./preprocessingService");
 const axios = require("axios");
+const { TRANSFORMATIONS } = require("./preprocessingService/constants");
+const {
+  tokenize,
+  textVectorizer,
+} = require("./preprocessingService/vectorize");
 
 const app = express();
 
@@ -633,8 +638,65 @@ app.post("/api/preprocessData", async (req, res) => {
       }
     };
 
+    const applyTransformations = (text) => {
+      let content = typeof text === "string" ? text : String(text);
+      if (body.checkboxes[TRANSFORMATIONS.REMOVE_USERNAMES]) {
+        content = content.replace(/@\S+/g, "").replace(/\s\s+/g, "");
+      }
+      if (body.checkboxes[TRANSFORMATIONS.REMOVE_URLS]) {
+        content = content.replace(/http\S+/g, "").replace(/\s\s+/g, "");
+      }
+      if (body.checkboxes[TRANSFORMATIONS.REMOVE_PUNCTUATION_MARKS]) {
+        content = content
+          .replace(/(?<!\d)\.(?!\d)|[^\w\s.']/g, " ")
+          .replace(/'/g, "")
+          .replace(/\s\s+/g, " ");
+      }
+      if (body.checkboxes[TRANSFORMATIONS.TEXT_TO_LOWERCASE]) {
+        content = content.toLowerCase();
+      }
+      if (body.checkboxes[TRANSFORMATIONS.REMOVE_SHORT_WORDS]) {
+        content = content
+          .split(" ")
+          .filter((e) => e.length > 2)
+          .join(" ");
+      }
+      return content
+        .split(" ")
+        .filter((e) => e.length !== 0)
+        .join(" ")
+        .trim();
+    };
+
+    const withTransformations = result.map((e) => {
+      return {
+        ...e,
+        posts: e.posts.map((f) => ({
+          ...f,
+          content: applyTransformations(f.content),
+        })),
+      };
+    });
+
+    const tokenizedDict = tokenize(withTransformations);
+
+    const withVectorization = withTransformations.map((e) => {
+      return {
+        ...e,
+        posts: e.posts.map((f) => ({
+          ...f,
+          content: textVectorizer(
+            tokenizedDict,
+            Object.keys(tokenizedDict).length,
+            f.content,
+            Math.floor(body.averageSentenceLength)
+          ),
+        })),
+      };
+    });
+
     const processed = preprocess({
-      mappedRows: result.reverse(),
+      mappedRows: withVectorization.reverse(),
       windowSize: body.windowSize,
       horizonSize: body.horizonSize,
       scaleColumnsSeparately: body.scaleColumnsSeparately,
