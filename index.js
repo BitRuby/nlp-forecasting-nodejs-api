@@ -86,6 +86,28 @@ const rowOtherPriceSchema = new mongoose.Schema({
   Low: String,
 });
 
+const rowSettingsSchema = new mongoose.Schema({
+  featureType: String,
+  labelType: String,
+  testFraction: Number,
+  scaleType: String,
+  pickColumns: Array,
+  windowSize: Number,
+  horizonSize: Number,
+  postsPerDay: Number,
+  checkboxes: Object,
+  averageSentenceLength: Number,
+  postsByRandom: Boolean,
+  removeNullValues: Boolean,
+  scaleColumnsSeparately: Boolean,
+  name: String,
+});
+
+const rowDatasetSchema = new mongoose.Schema({
+  data: Array,
+  name: String,
+});
+
 const BitcoinCollection = mongoose.model(
   "bitcoin-01-01-2015-01-01-2023",
   rowSchema
@@ -130,6 +152,10 @@ const InvestingLiteCollection = mongoose.model(
   "investing-100-01-01-2015-01-06-2023",
   rowSchema
 );
+
+const RowSettings = mongoose.model("row-settings", rowSettingsSchema);
+
+const Datasets = mongoose.model("datasets", rowDatasetSchema);
 
 const BITCOIN_VALUE = "bitcoin";
 const APPLE_VALUE = "apple";
@@ -509,6 +535,11 @@ app.post("/api/preprocessData", async (req, res) => {
     if (!body.pickColumns || !body.pickColumns.length) {
       throw new MissingParameterError("Pick columns");
     }
+    //In progress
+    if (body.pickColumns.find((e) => e === "content")) {
+      body.pickColumns = body.pickColumns.filter((e) => e !== "content");
+      console.error("Content value is in progress, can't set now");
+    }
     if (!body.postsPerDay) {
       throw new MissingParameterError("Posts per day");
     }
@@ -526,7 +557,7 @@ app.post("/api/preprocessData", async (req, res) => {
   }
   try {
     const startDate = new Date("2015-01-01").toISOString();
-    const endDate = new Date("2015-01-31").toISOString();
+    const endDate = new Date("2022-12-31").toISOString();
     const query = [
       {
         $match: {},
@@ -710,6 +741,69 @@ app.post("/api/preprocessData", async (req, res) => {
     res.status(200).json(processed);
   } catch (ex) {
     console.log(ex);
+  }
+});
+
+app.post("/api/settings", async (req, res) => {
+  try {
+    const body = req.body;
+    const foundObject = await RowSettings.findOne(body).exec();
+    if (!foundObject) {
+      const obj = new RowSettings(body);
+      await obj.save();
+    }
+    res.json(await RowSettings.find());
+  } catch (ex) {
+    res.status(500).send("Error saving settings");
+    console.error("Error saving settings: ", ex);
+  }
+});
+
+app.get("/api/settings", async (req, res) => {
+  try {
+    res.json(await RowSettings.find());
+  } catch (ex) {
+    res.status(500).send("Error loading settings");
+    console.error("Error loading settings: ", ex);
+  }
+});
+
+app.post("/api/dataset", async (req, res) => {
+  try {
+    const body = req.body;
+    const foundObject = await Datasets.findOne(body).exec();
+    if (!foundObject) {
+      const obj = new Datasets(body);
+      await obj.save();
+      res.json({
+        _id: obj._id,
+        name: obj.name,
+      });
+    }
+  } catch (ex) {
+    res.status(500).send("Error saving dataset");
+    console.error("Error saving dataset: ", ex);
+  }
+});
+
+app.get("/api/datasetlist", async (req, res) => {
+  try {
+    res.json((await Datasets.find()).map(({ data, ...rest }) => rest));
+  } catch (ex) {
+    res.status(500).send("Error loading dataset");
+    console.error("Error loading dataset: ", ex);
+  }
+});
+
+app.get("/api/dataset", async (req, res) => {
+  const id = req.params._id;
+  const foundObject = await Datasets.findById(id).exec();
+  if (!foundObject) {
+    res.json(foundObject);
+  } else {
+    res.json({
+      "No datasets found": "No datasets found",
+    });
   }
 });
 
