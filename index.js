@@ -13,8 +13,30 @@ const {
   tokenize,
   textVectorizer,
 } = require("./preprocessingService/vectorize");
+const WebSocket = require("ws");
+const http = require("http");
 
 const app = express();
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server });
+
+const connectedSockets = [];
+
+wss.on("connection", (socket) => {
+  console.log("Client connected");
+
+  connectedSockets.push(socket);
+
+  socket.on("message", (message) => {
+    console.log(`Received: ${message}`);
+  });
+});
+
+function sendToAllClients(message) {
+  connectedSockets.forEach((socket) => {
+    socket.send(message);
+  });
+}
 
 app.use(bodyParser.json());
 
@@ -532,6 +554,9 @@ app.post("/api/preprocessData", async (req, res) => {
     if (!body.labelType) {
       throw new MissingParameterError("Label type");
     }
+    if (!body.name) {
+      throw new MissingParameterError("Dataset name");
+    }
     if (!body.pickColumns || !body.pickColumns.length) {
       throw new MissingParameterError("Pick columns");
     }
@@ -543,6 +568,7 @@ app.post("/api/preprocessData", async (req, res) => {
     if (!body.postsPerDay) {
       throw new MissingParameterError("Posts per day");
     }
+    res.status(200).json({ message: "Preprocessing data started!" });
   } catch (ex) {
     if (ex instanceof MissingParameterError) {
       console.log(ex.message);
@@ -735,10 +761,16 @@ app.post("/api/preprocessData", async (req, res) => {
       scaleType: body.scaleType,
       labelName: getLabelName(),
     });
-
     const end = Date.now();
     console.log(`Execution time: ${end - start} ms`);
-    res.status(200).json(processed);
+    const ds = new Datasets({
+      data: processed,
+      name: body.name,
+    });
+    await ds.save();
+    sendToAllClients(
+      `Dataset ${body.name} has been saved after ${end - start} ms!`
+    );
   } catch (ex) {
     console.log(ex);
   }
@@ -788,25 +820,21 @@ app.post("/api/dataset", async (req, res) => {
 
 app.get("/api/datasetlist", async (req, res) => {
   try {
-    res.json((await Datasets.find()).map(({ data, ...rest }) => rest));
+    res.json(
+      (await Datasets.find()).map((e) => ({
+        value: e._id,
+        label: e.name,
+      }))
+    );
   } catch (ex) {
     res.status(500).send("Error loading dataset");
     console.error("Error loading dataset: ", ex);
   }
 });
 
-app.get("/api/dataset", async (req, res) => {
-  const id = req.params._id;
-  const foundObject = await Datasets.findById(id).exec();
-  if (!foundObject) {
-    res.json(foundObject);
-  } else {
-    res.json({
-      "No datasets found": "No datasets found",
-    });
-  }
-});
-
 app.listen(3000, () => {
   console.log("Server listening on port 3000");
+  server.listen(8080, () => {
+    console.log("WebSocket server is listening on port 8080");
+  });
 });
