@@ -20,4 +20,11 @@ const TRANSFORMATIONS = {
   REMOVE_SHORT_WORDS,
 };
 
-module.exports = { SCALE_TYPES, TRANSFORMATIONS };
+const NAIVE = "NAIVE";
+const DENSE = "DENSE";
+const CONV1D = "CONV1D";
+const LSTM = "LSTM";
+
+const ALGORITHMS = { NAIVE, DENSE, CONV1D, LSTM };
+
+module.exports = { SCALE_TYPES, TRANSFORMATIONS, ALGORITHMS };

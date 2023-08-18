@@ -7,14 +7,17 @@ const vader = require("vader-sentiment");
 const { transformations } = require("./transformations");
 const { countPostsByDate, MissingParameterError } = require("./utils");
 const { preprocess } = require("./preprocessingService");
-const axios = require("axios");
-const { TRANSFORMATIONS } = require("./preprocessingService/constants");
+const {
+  TRANSFORMATIONS,
+  ALGORITHMS,
+} = require("./preprocessingService/constants");
 const {
   tokenize,
   textVectorizer,
 } = require("./preprocessingService/vectorize");
 const WebSocket = require("ws");
 const http = require("http");
+const { predictNaive } = require("./predictionService/predictionNaive");
 
 const app = express();
 const server = http.createServer(app);
@@ -128,6 +131,19 @@ const rowSettingsSchema = new mongoose.Schema({
 const rowDatasetSchema = new mongoose.Schema({
   data: Array,
   name: String,
+  trainElements: Number,
+  testElements: Number,
+  featureType: String,
+  labelType: String,
+  windowSize: Number,
+  horizonSize: Number,
+  pickColumns: Array,
+  removeNullValues: Boolean,
+  testFraction: Number,
+  scaleType: String,
+  postsByRandom: Boolean,
+  postsPerDay: Number,
+  averageSentenceLength: Number,
 });
 
 const BitcoinCollection = mongoose.model(
@@ -766,6 +782,19 @@ app.post("/api/preprocessData", async (req, res) => {
     const ds = new Datasets({
       data: processed,
       name: body.name,
+      trainElements: processed[1].length,
+      testElements: processed[3].length,
+      featureType: body.featureType,
+      labelType: body.labelType,
+      windowSize: body.windowSize,
+      horizonSize: body.horizonSize,
+      pickColumns: body.pickColumns,
+      removeNullValues: body.removeNullValues,
+      testFraction: body.testFraction,
+      scaleType: body.scaleType,
+      postsByRandom: body.postsByRandom,
+      postsPerDay: body.postsPerDay,
+      averageSentenceLength: body.averageSentenceLength,
     });
     await ds.save();
     sendToAllClients(
@@ -824,11 +853,47 @@ app.get("/api/datasetlist", async (req, res) => {
       (await Datasets.find()).map((e) => ({
         value: e._id,
         label: e.name,
+        trainElements: e.trainElements,
+        testElements: e.testElements,
+        featureType: e.featureType,
+        labelType: e.labelType,
+        windowSize: e.windowSize,
+        horizonSize: e.horizonSize,
+        pickColumns: e.pickColumns,
+        removeNullValues: e.removeNullValues,
+        testFraction: e.testFraction,
+        scaleType: e.scaleType,
+        postsByRandom: e.postsByRandom,
+        postsPerDay: e.postsPerDay,
+        averageSentenceLength: e.averageSentenceLength,
       }))
     );
   } catch (ex) {
     res.status(500).send("Error loading dataset");
     console.error("Error loading dataset: ", ex);
+  }
+});
+
+app.post("/api/train", async (req, res) => {
+  try {
+    const body = req.body;
+    if (!body.datasetId) {
+      throw new MissingParameterError("Dataset id");
+    }
+    if (!body.algorithm) {
+      throw new MissingParameterError("Algorithm");
+    }
+    const ds = await Datasets.findById(body.datasetId);
+    if (!ds) {
+      throw new Error("Dataset not found!");
+    }
+    if (body.algorithm.value === ALGORITHMS.NAIVE) {
+      const predictionResult = await predictNaive(ds.data[3]);
+      res.send(predictionResult);
+    }
+  } catch (ex) {
+    res.status(500).send("Error training data");
+    console.error("Error training data: ", ex);
   }
 });
 
