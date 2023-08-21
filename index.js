@@ -18,6 +18,7 @@ const {
 const WebSocket = require("ws");
 const http = require("http");
 const { predictNaive } = require("./predictionService/predictionNaive");
+const { dense1Model } = require("./predictionService/dense1");
 
 const app = express();
 const server = http.createServer(app);
@@ -560,6 +561,84 @@ app.put("/api/investingLite", async (req, res) => {
   }
 });
 
+app.get("/api/test2", async (req, res) => {
+  const startDate = new Date("2022-11-26").toISOString();
+  const endDate = new Date("2022-11-30").toISOString();
+
+  const x = await BitcoinCollection.find({
+    date: {
+      $gte: startDate,
+      $lte: endDate,
+    },
+  });
+  res.status(200).send(x);
+});
+
+app.get("/api/test", async (req, res) => {
+  try {
+    const startDate = new Date("2015-01-01").toISOString();
+    const endDate = new Date("2022-12-31").toISOString();
+    const query = [
+      {
+        $match: {
+          timeOpen: {
+            $gte: startDate,
+            $lte: endDate,
+          },
+        },
+      },
+      {
+        $lookup: {
+          from: BitcoinCollection.modelName,
+          let: {
+            formattedTimeOpen: {
+              $substr: ["$timeOpen", 0, 10],
+            },
+          },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $eq: [
+                    { $dateToString: { format: "%Y-%m-%d", date: "$date" } },
+                    "$$formattedTimeOpen",
+                  ],
+                },
+              },
+            },
+            {
+              $sample: {
+                size: 5,
+              },
+            },
+          ],
+          as: "posts",
+        },
+      },
+      {
+        $project: {
+          posts: 1,
+          timeOpen: 1,
+          timeClose: 1,
+          timeHigh: 1,
+          timeLow: 1,
+          "quote.open": 1,
+          "quote.high": 1,
+          "quote.low": 1,
+          "quote.close": 1,
+          "quote.volume": 1,
+          "quote.marketCap": 1,
+        },
+      },
+    ];
+    const result = await BitcoinPriceCollection.aggregate(query);
+    res.status(200).send(result);
+  } catch (ex) {
+    res.status(500).send(ex);
+    console.log(ex);
+  }
+});
+
 app.post("/api/preprocessData", async (req, res) => {
   const start = Date.now();
   const body = req.body;
@@ -599,7 +678,7 @@ app.post("/api/preprocessData", async (req, res) => {
   }
   try {
     const startDate = new Date("2015-01-01").toISOString();
-    const endDate = new Date("2022-12-31").toISOString();
+    const endDate = new Date("2021-12-31").toISOString();
     const query = [
       {
         $match: {},
@@ -887,9 +966,12 @@ app.post("/api/train", async (req, res) => {
     if (!ds) {
       throw new Error("Dataset not found!");
     }
-    if (body.algorithm.value === ALGORITHMS.NAIVE) {
+    if (body.algorithm === ALGORITHMS.NAIVE) {
       const predictionResult = await predictNaive(ds.data[3]);
       res.send(predictionResult);
+    } else if (body.algorithm === ALGORITHMS.DENSE) {
+      const result = await dense1Model(ds.data);
+      res.send(result);
     }
   } catch (ex) {
     res.status(500).send("Error training data");
