@@ -574,6 +574,11 @@ app.get("/api/test2", async (req, res) => {
   res.status(200).send(x);
 });
 
+app.get("/api/test3", async (req, res) => {
+  await dense1Model();
+  res.status(200).send({});
+});
+
 app.get("/api/test", async (req, res) => {
   try {
     const startDate = new Date("2015-01-01").toISOString();
