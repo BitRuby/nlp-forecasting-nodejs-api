@@ -23,19 +23,16 @@ function normalizeSingleColumns(tensor, trainTensor) {
   let newArray = [];
   for (let i = 0; i < transposed.length; i++) {
     const curr = tf.tensor(transposed[i]);
-    if (trainTensor) {
+    if (transposedTrain) {
+      const currTrain = tf.tensor(transposedTrain[i]);
       newArray.push(
-        normalize(
-          curr,
-          tf.tensor(transposedTrain[i]).min(),
-          tf.tensor(transposedTrain[i]).max()
-        )
+        normalize(curr, currTrain.min(), currTrain.max()).arraySync()
       );
     } else {
-      newArray.push(normalize(curr));
+      newArray.push(normalize(curr).arraySync());
     }
   }
-  return tf.tensor(newArray).transpose().arraySync();
+  return tf.tensor(newArray).transpose();
 }
 
 function standarizeSingleColumns(tensor, trainTensor) {
@@ -47,24 +44,20 @@ function standarizeSingleColumns(tensor, trainTensor) {
   let newArray = [];
   for (let i = 0; i < transposed.length; i++) {
     const curr = tf.tensor(transposed[i]);
-    if (trainTensor) {
+    if (transposedTrain) {
+      const currTrain = tf.tensor(transposedTrain[i]);
       newArray.push(
         standarize(
           curr,
-          tf.tensor(transposedTrain[i]).mean(),
-          tf
-            .tensor(transposedTrain[i])
-            .sub(tf.tensor(transposedTrain[i]).mean())
-            .pow(2)
-            .mean()
-            .sqrt()
-        )
+          currTrain.mean(),
+          currTrain.sub(currTrain.mean()).pow(2).mean().sqrt()
+        ).arraySync()
       );
     } else {
       newArray.push(standarize(curr).arraySync());
     }
   }
-  return tf.tensor(newArray).transpose().arraySync();
+  return tf.tensor(newArray).transpose();
 }
 
 module.exports = {
