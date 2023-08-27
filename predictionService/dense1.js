@@ -1,14 +1,6 @@
 const tf = require("@tensorflow/tfjs-node");
-const { evaluateRegPreds, evaluateClassPreds } = require("./evaluate");
-const fs = require("fs");
-const csvParser = require("csv-parser");
-const {
-  standarize,
-  normalize,
-  standarizeSingleColumns,
-} = require("../preprocessingService/scale");
+const { evaluateRegPreds } = require("./evaluate");
 const _ = require("lodash");
-const { trainTestSplit } = require("../preprocessingService/trainTestSplit");
 
 async function dense1Model(data) {
   const xTrainTensor = tf.tensor(data[0]);
@@ -35,16 +27,13 @@ async function dense1Model(data) {
     optimizer: "adam",
     metrics: ["mse"],
   });
-  model.summary();
   await model.fit(xTrainTensor, yTrainTensor, {
     epochs: 100,
     batchSize: 128,
-    verbose: 0,
   });
   const predict = model.predict(xTestTensor);
-  const preds = await evaluateRegPreds(tf.squeeze(predict), yTestTensor);
+  const preds = await evaluateRegPreds(tf.squeeze(yTestTensor), tf.squeeze(predict));
   return preds;
 }
-
 
 module.exports = { dense1Model };
