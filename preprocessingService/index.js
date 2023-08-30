@@ -22,7 +22,8 @@ function preprocess({
   const { windows, labels } = createDataWindows(
     mappedRows,
     windowSize,
-    horizonSize
+    horizonSize,
+    'posts'
   );
 
   let trainFeatures, testFeatures, trainLabels, testLabels;

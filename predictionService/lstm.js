@@ -1,49 +1,56 @@
-import * as tf from "@tensorflow/tfjs";
-import { evaluateClassPreds } from "./evaluate";
+const tf = require("@tensorflow/tfjs-node");
+const { evaluateRegPreds } = require("./evaluate");
+const _ = require("lodash");
 
-export async function lstmModel(
-  xTrainTensor,
-  yTrainTensor,
-  xTestTensor,
-  yTestTensor
-) {
+async function lstmModel(data, body) {
+  const xTrainTensor = tf.tensor(data[0]);
+  const yTrainTensor = tf.tensor(data[1]);
+  const xTestTensor = tf.tensor(data[2]);
+  const yTestTensor = tf.tensor(data[3]);
+
+  console.log("LSTM Model");
+  console.log("xTrainTensor Shape: " + xTrainTensor.shape);
+  console.log("yTrainTensor Shape: " + yTrainTensor.shape);
+  console.log("xTestTensor Shape: " + xTestTensor.shape);
+  console.log("yTestTensor Shape: " + yTestTensor.shape);
   const model = tf.sequential();
-  model.add(
-    tf.layers.lstm({
-      units: 128,
-      activation: "relu",
-      inputShape: [1, 7],
-    })
-  );
+
+  body.layerValues.forEach((e, i) => {
+    if (i === 0) {
+      model.add(
+        tf.layers.lstm({
+          units: e.units,
+          activation: e.activation,
+          inputShape: xTrainTensor.shape.slice(1),
+        })
+      );
+    } else {
+      model.add(tf.layers.lstm({ units: e.units, activation: e.activation }));
+    }
+  });
+
   model.add(
     tf.layers.dense({
       units: 1,
-      activation: "sigmoid",
     })
   );
-  model.compile({
-    loss: "binaryCrossentropy",
-    optimizer: "adam",
-    metrics: ["accuracy"],
-  });
-  model.summary();
 
-  const fit = await model.fit(xTrainTensor, yTrainTensor, {
-    epochs: 100,
-    batchSize: 7,
-    verbose: 0,
+  model.compile({
+    loss: body.lossFunction,
+    optimizer: body.optimizerFunction,
+    metrics: ["mse"],
   });
-  console.log("Train accuracy: " + fit.history.acc[fit.history.acc.length - 1]);
+  await model.fit(xTrainTensor, yTrainTensor, {
+    epochs: Number(body.epochs),
+    batchSize: Number(body.batchSize),
+  });
 
   const predict = model.predict(xTestTensor);
-  console.log("First 10 predictions: ");
-  console.log(predict.arraySync().slice(0, 10));
-  console.log("First 10 true labels: ");
-  console.log(yTestTensor.arraySync().slice(0, 10));
-
-  const results = await evaluateClassPreds(
+  const preds = await evaluateRegPreds(
     tf.squeeze(yTestTensor),
-    tf.squeeze(tf.round(predict))
+    tf.squeeze(predict)
   );
-  console.log(results);
+  return preds;
 }
+
+module.exports = { lstmModel };

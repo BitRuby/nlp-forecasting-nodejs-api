@@ -19,6 +19,11 @@ const WebSocket = require("ws");
 const http = require("http");
 const { predictNaive } = require("./predictionService/predictionNaive");
 const { dense1Model } = require("./predictionService/dense1");
+const { conv1dModel } = require("./predictionService/conv1d");
+const { lstmModel } = require("./predictionService/lstm");
+const { createDataWindows } = require("./preprocessingService/windowing");
+const { trainTestSplit } = require("./preprocessingService/trainTestSplit");
+const tf = require("@tensorflow/tfjs");
 
 const app = express();
 const server = http.createServer(app);
@@ -131,6 +136,7 @@ const rowSettingsSchema = new mongoose.Schema({
 
 const rowDatasetSchema = new mongoose.Schema({
   data: Array,
+  labelData: Array,
   name: String,
   trainElements: Number,
   testElements: Number,
@@ -561,89 +567,6 @@ app.put("/api/investingLite", async (req, res) => {
   }
 });
 
-app.get("/api/test2", async (req, res) => {
-  const startDate = new Date("2022-11-26").toISOString();
-  const endDate = new Date("2022-11-30").toISOString();
-
-  const x = await BitcoinCollection.find({
-    date: {
-      $gte: startDate,
-      $lte: endDate,
-    },
-  });
-  res.status(200).send(x);
-});
-
-app.get("/api/test3", async (req, res) => {
-  await dense1Model();
-  res.status(200).send({});
-});
-
-app.get("/api/test", async (req, res) => {
-  try {
-    const startDate = new Date("2015-01-01").toISOString();
-    const endDate = new Date("2022-12-31").toISOString();
-    const query = [
-      {
-        $match: {
-          timeOpen: {
-            $gte: startDate,
-            $lte: endDate,
-          },
-        },
-      },
-      {
-        $lookup: {
-          from: BitcoinCollection.modelName,
-          let: {
-            formattedTimeOpen: {
-              $substr: ["$timeOpen", 0, 10],
-            },
-          },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $eq: [
-                    { $dateToString: { format: "%Y-%m-%d", date: "$date" } },
-                    "$$formattedTimeOpen",
-                  ],
-                },
-              },
-            },
-            {
-              $sample: {
-                size: 5,
-              },
-            },
-          ],
-          as: "posts",
-        },
-      },
-      {
-        $project: {
-          posts: 1,
-          timeOpen: 1,
-          timeClose: 1,
-          timeHigh: 1,
-          timeLow: 1,
-          "quote.open": 1,
-          "quote.high": 1,
-          "quote.low": 1,
-          "quote.close": 1,
-          "quote.volume": 1,
-          "quote.marketCap": 1,
-        },
-      },
-    ];
-    const result = await BitcoinPriceCollection.aggregate(query);
-    res.status(200).send(result);
-  } catch (ex) {
-    res.status(500).send(ex);
-    console.log(ex);
-  }
-});
-
 app.post("/api/preprocessData", async (req, res) => {
   const start = Date.now();
   const body = req.body;
@@ -684,6 +607,50 @@ app.post("/api/preprocessData", async (req, res) => {
   try {
     const startDate = new Date("2015-01-01").toISOString();
     const endDate = new Date("2021-12-31").toISOString();
+    let labelsOnlyQuery;
+
+    if (body.labelType === BITCOIN_VALUE) {
+      labelsOnlyQuery = {
+        timeOpen: {
+          $gte: startDate,
+          $lte: endDate,
+        },
+      };
+    } else {
+      labelsOnlyQuery = {
+        Date: {
+          $gte: startDate,
+          $lte: endDate,
+        },
+      };
+    }
+
+    const labelsOnly = await dbLabelModels[body.labelType].find(
+      labelsOnlyQuery
+    );
+    let formattedLabelsOnly;
+    if (body.labelType === BITCOIN_VALUE) {
+      formattedLabelsOnly = labelsOnly.reverse().map((e) => e.quote.close);
+    } else if (body.labelType === AMAZON_VALUE) {
+      formattedLabelsOnly = labelsOnly.reverse().map((e) => Number(e.Close));
+    } else {
+      formattedLabelsOnly = labelsOnly
+        .reverse()
+        .map((e) => Number(e["Close/Last"].slice(1)));
+    }
+
+    const { windows, labels } = createDataWindows(
+      formattedLabelsOnly,
+      body.windowSize,
+      body.horizonSize
+    );
+
+    let [xTrain, xTest] = trainTestSplit(windows, body.testFraction);
+    const [yTrain, yTest] = trainTestSplit(labels, body.testFraction);
+
+    xTrain = tf.expandDims(tf.tensor(xTrain), 1).arraySync();
+    xTest = tf.expandDims(tf.tensor(xTest), 1).arraySync();
+
     const query = [
       {
         $match: {},
@@ -863,8 +830,10 @@ app.post("/api/preprocessData", async (req, res) => {
     });
     const end = Date.now();
     console.log(`Execution time: ${end - start} ms`);
+
     const ds = new Datasets({
       data: processed,
+      labelData: [xTrain, yTrain, xTest, yTest],
       name: body.name,
       trainElements: processed[1].length,
       testElements: processed[3].length,
@@ -967,6 +936,21 @@ app.post("/api/train", async (req, res) => {
     if (!body.algorithm) {
       throw new MissingParameterError("Algorithm");
     }
+    if (!body.epochs) {
+      throw new MissingParameterError("Epochs");
+    }
+    if (!body.batchSize) {
+      throw new MissingParameterError("Batch size");
+    }
+    if (!body.layerValues) {
+      throw new MissingParameterError("Layer values");
+    }
+    if (!body.lossFunction) {
+      throw new MissingParameterError("Loss function");
+    }
+    if (!body.optimizerFunction) {
+      throw new MissingParameterError("Optimizer function");
+    }
     const ds = await Datasets.findById(body.datasetId);
     if (!ds) {
       throw new Error("Dataset not found!");
@@ -975,7 +959,22 @@ app.post("/api/train", async (req, res) => {
       const predictionResult = await predictNaive(ds.data[3]);
       res.send(predictionResult);
     } else if (body.algorithm === ALGORITHMS.DENSE) {
-      const result = await dense1Model(ds.data);
+      const result = await dense1Model(ds.data, body);
+      res.send(result);
+    } else if (body.algorithm === ALGORITHMS.CONV1D) {
+      const result = await conv1dModel(ds.data, body);
+      res.send(result);
+    } else if (body.algorithm === ALGORITHMS.LSTM) {
+      const result = await lstmModel(ds.data, body);
+      res.send(result);
+    } else if (body.algorithm === ALGORITHMS.DENSE_LABEL) {
+      const result = await dense1Model(ds.labelData, body);
+      res.send(result);
+    } else if (body.algorithm === ALGORITHMS.CONV1D_LABEL) {
+      const result = await conv1dModel(ds.labelData, body);
+      res.send(result);
+    } else if (body.algorithm === ALGORITHMS.LSTM_LABEL) {
+      const result = await lstmModel(ds.labelData, body);
       res.send(result);
     }
   } catch (ex) {
