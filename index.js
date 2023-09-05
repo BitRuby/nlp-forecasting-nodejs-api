@@ -238,7 +238,7 @@ app.get("/api/bitcoin", async (req, res) => {
 app.get("/api/bitcoin/price", async (req, res) => {
   try {
     const startDate = new Date("2015-01-01").toISOString();
-    const endDate = new Date("2022-12-31").toISOString();
+    const endDate = new Date("2021-12-31").toISOString();
     const price = await BitcoinPriceCollection.find({
       timeOpen: {
         $gte: startDate,
@@ -263,8 +263,8 @@ app.get("/api/bitcoin/price", async (req, res) => {
 
 app.get("/api/apple/price", async (req, res) => {
   try {
-    const startDate = new Date("2014-12-30").toISOString();
-    const endDate = new Date("2022-12-31").toISOString();
+    const startDate = new Date("2015-01-01").toISOString();
+    const endDate = new Date("2021-12-31").toISOString();
     const price = await ApplePriceCollection.find({
       Date: {
         $gte: startDate,
@@ -289,8 +289,8 @@ app.get("/api/apple/price", async (req, res) => {
 
 app.get("/api/google/price", async (req, res) => {
   try {
-    const startDate = new Date("2014-12-30").toISOString();
-    const endDate = new Date("2022-12-31").toISOString();
+    const startDate = new Date("2015-01-01").toISOString();
+    const endDate = new Date("2021-12-31").toISOString();
     const price = await GooglePriceCollection.find({
       Date: {
         $gte: startDate,
@@ -315,8 +315,8 @@ app.get("/api/google/price", async (req, res) => {
 
 app.get("/api/microsoft/price", async (req, res) => {
   try {
-    const startDate = new Date("2014-12-30").toISOString();
-    const endDate = new Date("2022-12-31").toISOString();
+    const startDate = new Date("2015-01-01").toISOString();
+    const endDate = new Date("2021-12-31").toISOString();
     const price = await MicrosoftPriceCollection.find({
       Date: {
         $gte: startDate,
@@ -341,8 +341,8 @@ app.get("/api/microsoft/price", async (req, res) => {
 
 app.get("/api/tesla/price", async (req, res) => {
   try {
-    const startDate = new Date("2014-12-30").toISOString();
-    const endDate = new Date("2022-12-31").toISOString();
+    const startDate = new Date("2015-01-01").toISOString();
+    const endDate = new Date("2021-12-31").toISOString();
     const price = await TeslaPriceCollection.find({
       Date: {
         $gte: startDate,
@@ -367,8 +367,8 @@ app.get("/api/tesla/price", async (req, res) => {
 
 app.get("/api/amazon/price", async (req, res) => {
   try {
-    const startDate = new Date("2014-12-30").toISOString();
-    const endDate = new Date("2023-01-01").toISOString();
+    const startDate = new Date("2015-01-01").toISOString();
+    const endDate = new Date("2021-12-31").toISOString();
     const price = await AmazonPriceCollection.find({
       Date: {
         $gte: startDate,

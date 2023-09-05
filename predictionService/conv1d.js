@@ -63,7 +63,11 @@ async function conv1dModel(data, body) {
     tf.squeeze(yTestTensor),
     tf.squeeze(predict)
   );
-  return preds;
+  return {
+    preds,
+    yTest: tf.squeeze(yTestTensor).arraySync(),
+    predict: tf.squeeze(predict).arraySync(),
+  };
 }
 
 module.exports = { conv1dModel };

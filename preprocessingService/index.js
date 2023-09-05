@@ -23,7 +23,7 @@ function preprocess({
     mappedRows,
     windowSize,
     horizonSize,
-    'posts'
+    "posts"
   );
 
   let trainFeatures, testFeatures, trainLabels, testLabels;
@@ -78,7 +78,7 @@ function preprocess({
   //       min: tf.tensor(array).min(),
   //       max: tf.tensor(array).max(),
   //       mean: tf.tensor(array).mean(),
-  //       std: tf.tensor(array).sub(tf.tensor(array).mean()).pow(2).mean().sqrt()
+  //       std: tf.tensor(array).sub(tf.tensor(array).mean()).pow(2).mean().sqrt(),
   //     };
   //   });
   //   const getScaledColumn = (columnValues, columnName) => {
@@ -129,7 +129,12 @@ function preprocess({
   //     testFeatures = standarize(
   //       tf.tensor(testFeatures),
   //       tf.tensor(trainFeatures).mean(),
-  //       tf.tensor(trainFeatures).sub(tf.tensor(trainFeatures).mean()).pow(2).mean().sqrt()
+  //       tf
+  //         .tensor(trainFeatures)
+  //         .sub(tf.tensor(trainFeatures).mean())
+  //         .pow(2)
+  //         .mean()
+  //         .sqrt()
   //     ).arraySync();
   //   }
   // }
@@ -151,7 +156,21 @@ function preprocess({
     )
   );
 
-  return [trainFeatures.arraySync(), trainLabels, testFeatures.arraySync(), testLabels];
+  if (labelName === "quote.close") {
+  } else if (labelName === "Close") {
+    trainLabels = trainLabels.map((e) => [Number(e[0])]);
+    testLabels = testLabels.map((e) => [Number(e[0])]);
+  } else {
+    trainLabels = trainLabels.map((e) => [Number(e[0].slice(1))]);
+    testLabels = testLabels.map((e) => [Number(e[0].slice(1))]);
+  }
+
+  return [
+    trainFeatures.arraySync(),
+    trainLabels,
+    testFeatures.arraySync(),
+    testLabels,
+  ];
 }
 
 module.exports = { preprocess };

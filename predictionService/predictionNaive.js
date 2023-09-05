@@ -6,7 +6,11 @@ const predictNaive = async (yTest) => {
     tf.tensor(yTest.slice(1)),
     tf.tensor(yTest.slice(0, yTest.length - 1))
   );
-  return preds;
+  return {
+    preds,
+    yTest: tf.tensor(yTest.slice(1)).arraySync(),
+    predict: tf.tensor(yTest.slice(0, yTest.length - 1)).arraySync(),
+  };
 };
 
 module.exports = { predictNaive };
